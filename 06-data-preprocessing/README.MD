@@ -1,20 +1,30 @@
-# Steps
+# Contents
 
-1. **Collect and inspect data** — understand its structure, types, and quality.
-2. **Clean the data** — fix inconsistencies, remove duplicates, and correct invalid values.
-3. **Handle missing values** — remove incomplete records or impute missing values appropriately.
-4. **Handle outliers** — investigate unusual values and decide whether to retain, transform, cap, or remove them.
-5. **Transform data** — encode categorical features and scale numeric features when needed.
-6. **Select or create features** — keep relevant variables and derive useful features.
-7. **Split the data** — create training, validation, and test sets.
-8. **Validate the processed data** — check that values and formats are suitable and that no information leaks across splits.
-
-Fit preprocessing transformations on the training set only, then apply them to the validation and test sets.
-
-
+- [Introduction](#introduction)
+	- [What is data preprocessing?](#what-is-data-preprocessing)
+	- [What is data cleaning?](#what-is-data-cleaning)
+	- [Raw data vs. clean data](#raw-data-vs-clean-data)
+	- [Features, labels, and observations](#features-labels-and-observations)
+	- [Numerical and categorical data](#numerical-and-categorical-data)
+	- [What is a data preprocessing pipeline?](#what-is-a-data-preprocessing-pipeline)
+	- [Common problems in real-world datasets](#common-problems-in-real-world-datasets)
+- [Data Cleaning](#data-cleaning)
+	- [Duplicate Values](#duplicate-values)
+	- [Correct invalid and inconsistent data](#correct-invalid-and-inconsistent-data)
+- [Handling Missing Values](#handling-missing-values)
+	- [Detect missing values](#detect-missing-values)
+	- [Removal Rows and Columns](#removal-rows-and-columns)
+	- [Numerical imputation](#numerical-imputation)
+	- [Categorical imputation](#categorical-imputation)
+	- [Outlier Detection and Treatment](#outlier-detection-and-treatment)
+- [Categorical Data Encoding](#categorical-data-encoding)
+- [Data Transformation/Feature Transformation](#data-transformationfeature-transformation)
+- [Feature Scaling](#feature-scaling)
+- [Feature Engineering](#feature-engineering)
+- [Feature selection](#feature-selection)
+- [Train, validation, and test split](#train-validation-and-test-split)
 
 # Introduction
-
 ## What is data preprocessing?
 
 Data preprocessing is the process of preparing raw data for analysis or machine learning. It includes inspecting and cleaning the data, handling missing values and outliers, transforming features, and splitting the data into datasets for training and evaluation.
@@ -63,6 +73,7 @@ Think of it as a recipe for preparing data: it applies the same ordered operatio
 The exact steps depend on the dataset and model. A defined, reusable pipeline makes processing reproducible and helps prevent data leakage.
 
 For example, when predicting house prices, a pipeline can fill missing values, encode property types, and scale numeric features. It learns the values needed for these transformations from the training set, then reuses them for validation, test, and future records. This avoids allowing evaluation data to influence how the model is prepared and makes predictions on new records comparable to training inputs.
+
 
 ## Common problems in real-world datasets
 
@@ -787,3 +798,43 @@ This is why scikit-learn `Pipeline` is so useful: it ensures preprocessing and f
 
 Feature engineering is the art and science of turning raw data into better model inputs. It includes transformations, encoding, combinations, and domain-inspired features. The goal is not to add complexity for its own sake, but to provide the model with representations that reveal the underlying patterns in the data. When done well, feature engineering can significantly improve model accuracy, robustness, and interpretability.
 
+## Train, validation, and test split
+
+A **data split** partitions observations into separate subsets so a model can be trained and evaluated on different examples. Splitting helps estimate how well a model may perform on data it has not seen. First separate the input features (`X`) from the label or target (`y`), then split the paired rows so each feature row stays matched with its label.
+
+- **Training set:** used to fit the model and learn its parameters. Fit data-dependent preprocessing here too, including imputers, scalers, and encoders. For example, calculate the median used for imputation from training data only.
+- **Validation set:** used during development to compare models, select features, and tune hyperparameters such as tree depth or regularization strength. Do not use it to fit the model parameters. Repeatedly choosing settings based on validation scores can overfit those choices to the validation set.
+- **Test set:** a final holdout used to estimate performance after model and preprocessing choices are complete. Do not use it for training, tuning, or making preprocessing decisions. Ideally, evaluate on it once at the end; repeated use turns it into another validation set.
+
+The appropriate proportions depend on the amount of data, task, and evaluation needs. A common two-way split is 80% training and 20% test. When a separate validation set is useful, 60% training, 20% validation, and 20% test is one possible starting point—not a universal rule. Keep enough observations in each subset for meaningful evaluation. With very small datasets, cross-validation on the training data can help with model selection while preserving a final test set.
+
+### Example: create train, validation, and test sets
+
+This example creates a 60/20/20 split: first reserve 20% for testing, then use 25% of the remaining 80% for validation. For classification, `stratify` keeps the class proportions approximately consistent across splits.
+
+```python
+from sklearn.model_selection import train_test_split
+
+# X contains features and y contains the target label.
+X_train_val, X_test, y_train_val, y_test = train_test_split(
+	X, y, test_size=0.20, random_state=42, stratify=y
+)
+X_train, X_val, y_train, y_val = train_test_split(
+	X_train_val, y_train_val, test_size=0.25,
+	random_state=42, stratify=y_train_val
+)
+
+print(len(X_train), len(X_val), len(X_test))
+```
+
+`random_state` makes the randomized split reproducible when the data and settings stay the same. Stratification is useful for classification, particularly when classes are imbalanced, but is generally not used with continuous regression targets. If a class is very rare, make sure there are enough examples for it to appear in every relevant subset.
+
+### Choose a split strategy that matches the data
+
+Random splitting is not suitable for every problem. The split should reflect how the model will encounter future examples:
+
+- **Time-dependent data:** train on earlier observations and validate/test on later ones. A random split may let future information help predict the past and produce an overly optimistic score.
+- **Grouped data:** keep related examples together. For example, if the goal is to predict outcomes for new patients, all records from one patient should be in only one subset. Otherwise, correlated records can appear in both training and test data.
+- **Classification:** stratify by the target when appropriate so each split has a representative share of each class.
+
+After splitting, fit preprocessing and the model using training data only. Use validation results for development choices, then apply the final fitted pipeline to test features and calculate the final metric against test labels. Do not use test labels to tune anything. Also check for duplicates or related information crossing subset boundaries: leakage can make evaluation scores misleading.
